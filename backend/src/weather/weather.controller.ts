@@ -138,6 +138,26 @@ export class WeatherController {
   }
 
  
+  @Get('by-location')
+  @UseGuards(JwtAuthGuard)
+  async getWeatherByLocation(
+    @Query('latitude') latitude: string,
+    @Query('longitude') longitude: string,
+    @Query('radius') radius?: string
+  ) {
+    this.logger.log(`📍 Requisição para /weather/by-location: ${latitude}, ${longitude}`)
+    
+    if (!latitude || !longitude) {
+        return []
+    }
+
+    const lat = parseFloat(latitude)
+    const lon = parseFloat(longitude)
+    const radiusKm = radius ? parseFloat(radius) : 50 // 50km de raio padrão
+
+    return this.weatherService.findNearbyWeather(lat, lon, radiusKm)
+  }
+
   @Get()
   async getAll() {
     this.logger.log('🌤️  Requisição para /weather')

@@ -73,6 +73,7 @@ services:
     env_file:
       - ./.env
     environment:
+      - ENABLE_MULTI_LOCATION=${ENABLE_MULTI_LOCATION}
       - LATITUDE=${LATITUDE}
       - LONGITUDE=${LONGITUDE}
       - COLLECTION_INTERVAL_MINUTES=${COLLECTION_INTERVAL_MINUTES}

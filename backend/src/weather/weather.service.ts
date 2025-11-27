@@ -401,4 +401,99 @@ export class WeatherService {
       }
     }
   }
+
+
+  async findNearbyWeather(lat: number, lon: number, radiusKm: number = 50) {
+    try {
+      this.logger.log(
+        `Buscando dados próximos a ${lat}, ${lon} (raio: ${radiusKm}km)`
+      )
+
+      // Conversão aproximada: 1 grau ≈ 111km
+      const degreesRadius = radiusKm / 111
+
+      const nearbyData = await this.weatherModel
+        .find({
+          'location.latitude': {
+            $gte: lat - degreesRadius,
+            $lte: lat + degreesRadius,
+          },
+          'location.longitude': {
+            $gte: lon - degreesRadius,
+            $lte: lon + degreesRadius,
+          },
+        })
+        .sort({ createdAt: -1 })
+        .limit(50) // Aumentado para pegar mais cidades se houver
+        .lean()
+        .exec()
+
+      this.logger.log(`Encontrados ${nearbyData.length} registros próximos`)
+
+      // Filtrar duplicatas (pegar apenas o mais recente de cada cidade)
+      const uniqueCities = new Map()
+      
+      nearbyData.forEach(item => {
+        const city = item.location?.city || 'Unknown'
+        if (!uniqueCities.has(city)) {
+            uniqueCities.set(city, item)
+        }
+      })
+      
+      const uniqueData = Array.from(uniqueCities.values())
+
+      return uniqueData
+        .map(item => ({
+          id: item._id.toString(),
+          city: item.location?.city || 'Unknown',
+          temperature: item.data?.temperature || 0,
+          humidity: item.data?.humidity || 0,
+          windSpeed: this.getWindSpeed(item.data),
+          description:
+            item.data?.description ||
+            (item.data as any)?.weatherCondition ||
+            'No description',
+          timestamp: item.timestamp || item.createdAt,
+          distance: this.calculateDistance(
+            lat,
+            lon,
+            item.location?.latitude,
+            item.location?.longitude
+          ),
+        }))
+        .sort((a, b) => a.distance - b.distance) // Ordenar por distância
+    } catch (error) {
+      this.logger.error('Erro ao buscar dados próximos:', error)
+      return []
+    }
+  }
+
+  private calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return 0
+    
+    const R = 6371 // Raio da Terra em km
+    const dLat = this.deg2rad(lat2 - lat1)
+    const dLon = this.deg2rad(lon2 - lon1)
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.deg2rad(lat1)) *
+        Math.cos(this.deg2rad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2)
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    const distance = R * c
+
+    return Math.round(distance * 10) / 10 // Arredondar para 1 casa decimal
+  }
+
+  private deg2rad(deg: number): number {
+    return deg * (Math.PI / 180)
+  }
 }

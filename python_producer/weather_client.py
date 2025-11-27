@@ -7,17 +7,20 @@ from config import Config
 class WeatherClient:
     def __init__(self):
         self.api_url = Config.WEATHER_API_URL
-        self.latitude = Config.LATITUDE
-        self.longitude = Config.LONGITUDE
 
-    def fetch_weather_data(self) -> Optional[Dict]:
+    def fetch_weather_data(self, latitude: float, longitude: float, city_name: str = None) -> Optional[Dict]:
         """
-        Busca dados climáticos da API Open-Meteo e adiciona localização detalhada
+        Busca dados climáticos da API Open-Meteo para coordenadas específicas
+        
+        Args:
+            latitude: Latitude da localização
+            longitude: Longitude da localização
+            city_name: Nome da cidade (opcional, usado para override no normalize)
         """
         try:
             params = {
-                "latitude": self.latitude,
-                "longitude": self.longitude,
+                "latitude": latitude,
+                "longitude": longitude,
                 "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code",
                 "hourly": "precipitation_probability",
                 "timezone": "America/Sao_Paulo"
@@ -27,15 +30,21 @@ class WeatherClient:
             response.raise_for_status()
             
             data = response.json()
-            return self._normalize_data(data)
+            return self._normalize_data(data, latitude, longitude, city_name)
             
         except requests.exceptions.RequestException as e:
-            print(f"❌ Error fetching weather data: {e}")
+            print(f"❌ Error fetching weather data for {city_name or f'{latitude},{longitude}'}: {e}")
             return None
 
-    def _normalize_data(self, raw_data: Dict) -> Dict:
+    def _normalize_data(self, raw_data: Dict, latitude: float, longitude: float, city_name: str = None) -> Dict:
         """
         Normaliza dados da API para formato padrão, incluindo lookup de cidade/estado/país
+        
+        Args:
+            raw_data: Dados brutos da API
+            latitude: Latitude da localização
+            longitude: Longitude da localização
+            city_name: Nome da cidade (opcional, sobrescreve o lookup)
         """
         current = raw_data.get("current", {})
         hourly = raw_data.get("hourly", {})
@@ -46,13 +55,21 @@ class WeatherClient:
             precipitation_prob = hourly["precipitation_probability"][0]
         
         # Geocoding reverso para obter cidade, estado e país
-        location_info = self._get_location_info()
+        # Se city_name foi fornecido, usa ele. Caso contrário, faz lookup
+        if city_name:
+            location_info = {
+                "city": city_name,
+                "state": "São Paulo",
+                "country": "Brazil"
+            }
+        else:
+            location_info = self._get_location_info(latitude, longitude)
         
         normalized = {
             "timestamp": datetime.utcnow().isoformat(),
             "location": {
-                "latitude": float(self.latitude),
-                "longitude": float(self.longitude),
+                "latitude": float(latitude),
+                "longitude": float(longitude),
                 "city": location_info.get("city", "Unknown"),
                 "state": location_info.get("state", "Unknown"),
                 "country": location_info.get("country", "Unknown")
@@ -71,15 +88,19 @@ class WeatherClient:
         
         return normalized
 
-    def _get_location_info(self) -> Dict[str, str]:
+    def _get_location_info(self, latitude: float, longitude: float) -> Dict[str, str]:
         """
         Retorna cidade, estado e país via geocoding reverso usando Nominatim API
+        
+        Args:
+            latitude: Latitude da localização
+            longitude: Longitude da localização
         """
         try:
             url = "https://nominatim.openstreetmap.org/reverse"
             params = {
-                "lat": self.latitude,
-                "lon": self.longitude,
+                "lat": latitude,
+                "lon": longitude,
                 "format": "json",
                 "accept-language": "pt"
             }
@@ -99,7 +120,7 @@ class WeatherClient:
                 "country": address.get("country")
             }
         except Exception as e:
-            print(f"❌ Error fetching location info: {e}")
+            print(f"❌ Error fetching location info for {latitude},{longitude}: {e}")
             return {}
 
     def _get_weather_condition(self, code: int) -> str:

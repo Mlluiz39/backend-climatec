@@ -3,8 +3,15 @@ import os
 class Config:
     # Open-Meteo API
     WEATHER_API_URL = "https://api.open-meteo.com/v1/forecast"
-    LATITUDE = os.getenv("LATITUDE", "-23.65221")
-    LONGITUDE = os.getenv("LONGITUDE", "-46.45428")
+    
+    # Multi-location support
+    # Set ENABLE_MULTI_LOCATION=true to collect from multiple cities in SP state
+    # Set ENABLE_MULTI_LOCATION=false to use single location (LATITUDE/LONGITUDE below)
+    ENABLE_MULTI_LOCATION = os.getenv("ENABLE_MULTI_LOCATION", "true").lower() == "true"
+    
+    # Single location configuration (used when ENABLE_MULTI_LOCATION=false)
+    SINGLE_LATITUDE = os.getenv("LATITUDE", "-23.65221")
+    SINGLE_LONGITUDE = os.getenv("LONGITUDE", "-46.45428")
     
     # RabbitMQ
     RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
